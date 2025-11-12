@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -104,21 +103,29 @@
             </div>
             <p><small>Esta URL se guardará localmente en tu navegador.</small></p>
         </div>
-        
-        <div class="instructions">
-            <h3>Instrucciones de uso:</h3>
-            <ol>
-                <li><strong>Operadores:</strong> Registren el código de operación y su nombre cuando un cash out esté apto para revisión.</li>
-                <li><strong>Supervisores:</strong> Revisen la cola de cash outs pendientes y realicen la segunda verificación.</li>
-                <li>Al verificar, los datos se exportarán automáticamente a Google Sheets en la pestaña correspondiente a cada compañía.</li>
-                <li><strong>Compañías disponibles:</strong> Play Play Play, Lucky Lady, Wise Gang, Ballerz World, Ocean Sluggerz, Elite</li>
-            </ol>
-        </div>
     </div>
 
     <div id="notification" class="notification"></div>
 
     <script>
+        // Funciones para notificaciones push supervisor
+        function solicitarPermisoNotificacion() {
+            if ('Notification' in window) {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission();
+                }
+            }
+        }
+
+        function mostrarPushNotificacionCashOut(data) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Nuevo Cash Out registrado', {
+                    body: `Operador: ${data.operatorName}\nCódigo: ${data.operationCode}\nCompañía: ${data.company}`,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/4315/4315445.png'
+                });
+            }
+        }
+
         // Elementos del DOM
         const operatorBtn = document.getElementById('operatorBtn');
         const supervisorBtn = document.getElementById('supervisorBtn');
@@ -143,19 +150,13 @@
         initApp();
         
         function initApp() {
-            // Cargar datos guardados localmente
             loadLocalData();
-            
-            // Cargar URL guardada localmente
             const savedScriptURL = localStorage.getItem('cashoutScriptURL');
             if (savedScriptURL) {
                 scriptURLInput.value = savedScriptURL;
             }
-            
             updateQueueCount();
             updateLastUpdateTime();
-            
-            // Event listeners
             forceRefresh.addEventListener('click', loadVerificationQueue);
             clearLocalData.addEventListener('click', clearLocalStorage);
         }
@@ -202,7 +203,7 @@
                 lastUpdate.textContent = new Date().toLocaleTimeString();
             }
         }
-        
+
         // Guardar URL
         saveScriptURLBtn.addEventListener('click', () => {
             const url = scriptURLInput.value;
@@ -213,7 +214,7 @@
                 showNotification('Por favor, ingresa una URL válida', 'error');
             }
         });
-        
+
         // Cambiar entre modos
         operatorBtn.addEventListener('click', () => {
             operatorBtn.classList.add('active');
@@ -222,24 +223,23 @@
             supervisorSection.style.display = 'none';
             logoutBtn.style.display = 'none';
         });
-        
+
         supervisorBtn.addEventListener('click', () => {
-            // Verificar si ya está autenticado
             const isAuthenticated = sessionStorage.getItem('supervisorAuth') === 'true';
-            
             if (!isAuthenticated) {
-                // Pedir contraseña
                 const password = prompt('Ingrese la contraseña de supervisor:');
-                
                 if (password === 'superctrl2023') {
                     sessionStorage.setItem('supervisorAuth', 'true');
                     showNotification('✅ Acceso autorizado', 'success');
+                    solicitarPermisoNotificacion();
                 } else {
                     showNotification('❌ Contraseña incorrecta', 'error');
-                    return; // No cambiar al modo supervisor
+                    return;
                 }
+            } else {
+                solicitarPermisoNotificacion();
             }
-            
+
             supervisorBtn.classList.add('active');
             operatorBtn.classList.remove('active');
             supervisorSection.style.display = 'block';
@@ -247,41 +247,36 @@
             logoutBtn.style.display = 'inline-block';
             loadVerificationQueue();
         });
-        
-        // Cerrar sesión de supervisor
+
         logoutBtn.addEventListener('click', () => {
             sessionStorage.removeItem('supervisorAuth');
             operatorBtn.click();
             showNotification('Sesión cerrada', 'success');
         });
-        
+
         // Enviar formulario de operador
         cashoutForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const submitButton = cashoutForm.querySelector('button');
             const originalText = submitButton.textContent;
             submitButton.textContent = 'Enviando...';
             submitButton.disabled = true;
-            
-            // Ocultar mensajes previos
+
             document.getElementById('operatorSuccess').style.display = 'none';
             document.getElementById('operatorError').style.display = 'none';
-            
+
             try {
-                // Recopilar datos del formulario
                 const formData = new FormData(cashoutForm);
                 const data = {
                     operationCode: formData.get('operationCode'),
                     operatorName: formData.get('operatorName'),
                     company: formData.get('company')
                 };
-                
+
                 console.log('📤 Datos del formulario:', data);
-                
-                // Agregar a la cola local
+
                 const cashoutId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                
                 const newCashOut = {
                     id: cashoutId,
                     operationCode: data.operationCode,
@@ -290,32 +285,32 @@
                     timestamp: new Date().toISOString(),
                     source: 'local'
                 };
-                
+
                 verificationQueueData.push(newCashOut);
                 saveLocalData();
-                
+
                 console.log('✅ Cash out agregado a la cola local:', newCashOut);
-                
-                // Mostrar mensaje de éxito
+
                 document.getElementById('operatorSuccess').style.display = 'block';
                 cashoutForm.reset();
-                
+
                 showNotification('Cash out registrado correctamente', 'success');
-                
+                // Solo lanzamos notificación si el supervisor está logueado
+                if (sessionStorage.getItem('supervisorAuth') === 'true') {
+                    mostrarPushNotificacionCashOut(data);
+                }
+
             } catch (error) {
-                // Mostrar mensaje de error
                 document.getElementById('operatorError').textContent = 'Error: ' + error.message;
                 document.getElementById('operatorError').style.display = 'block';
                 console.error('❌ Error:', error);
                 showNotification('Error: ' + error.message, 'error');
             } finally {
-                // Restaurar el botón
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
             }
         });
-        
-        // Cargar cola de verificación
+
         async function loadVerificationQueue() {
             try {
                 console.log('🔄 Cargando cola de verificación...');
@@ -327,12 +322,10 @@
             }
         }
         
-        // Renderizar cola de verificación
         function renderVerificationQueue() {
             verificationQueue.innerHTML = '';
-            
             console.log('🎨 Renderizando cola con datos:', verificationQueueData);
-            
+
             const companyColors = {
                 'Play Play Play': 'company-1',
                 'Lucky Lady': 'company-2',
@@ -345,7 +338,6 @@
             if (verificationQueueData.length > 0) {
                 verificationQueueData.forEach(item => {
                     const companyClass = companyColors[item.company] || 'company-1';
-                    
                     const cashoutElement = document.createElement('div');
                     cashoutElement.className = 'cashout-item';
                     cashoutElement.id = `cashout-${item.id}`;
@@ -362,18 +354,17 @@
                             <button class="btn-reject" data-id="${item.id}">Rechazar</button>
                         </div>
                     `;
-                    
                     verificationQueue.appendChild(cashoutElement);
                 });
-                
+
                 document.querySelectorAll('.btn-verify').forEach(btn => {
                     btn.addEventListener('click', verifyCashOut);
                 });
-                
+
                 document.querySelectorAll('.btn-reject').forEach(btn => {
                     btn.addEventListener('click', rejectCashOut);
                 });
-                
+
                 console.log(`✅ Se renderizaron ${verificationQueueData.length} cash outs`);
             } else {
                 verificationQueue.innerHTML = '<p>No hay cash outs pendientes de verificación.</p>';
@@ -382,44 +373,43 @@
             updateQueueCount();
             updateLastUpdateTime();
         }
-        
-        // Verificar cash out
+
         async function verifyCashOut(e) {
             const scriptURL = scriptURLInput.value;
-            
+
             const button = e.target;
             const cashoutId = button.getAttribute('data-id');
             const cashoutItem = document.getElementById(`cashout-${cashoutId}`);
-            
+
             if (!cashoutItem) {
                 showNotification('Este cash out ya ha sido procesado', 'error');
                 return;
             }
-            
+
             const supervisorName = cashoutItem.querySelector('.supervisor-name').value;
-            
+
             if (!supervisorName) {
                 showNotification('Por favor, ingrese su nombre', 'error');
                 return;
             }
-            
+
             button.textContent = 'Verificando...';
             button.disabled = true;
-            
+
             try {
                 const cashoutIndex = verificationQueueData.findIndex(item => item.id === cashoutId);
-                
+
                 if (cashoutIndex === -1) {
                     showNotification('Este cash out ya ha sido procesado', 'error');
                     cashoutItem.remove();
                     return;
                 }
-                
+
                 const cashout = verificationQueueData[cashoutIndex];
-                
+
                 verificationQueueData.splice(cashoutIndex, 1);
                 saveLocalData();
-                
+
                 let sheetsSuccess = false;
                 if (scriptURL) {
                     try {
@@ -430,38 +420,38 @@
                             supervisorName: supervisorName,
                             action: 'verify'
                         });
-                        
+
                         const urlWithParams = `${scriptURL}?${params}`;
                         console.log('📤 Enviando a Google Sheets:', urlWithParams);
-                        
+
                         await fetch(urlWithParams, {
                             method: 'GET',
                             mode: 'no-cors'
                         });
-                        
+
                         sheetsSuccess = true;
                         console.log('✅ Solicitud enviada correctamente');
-                        
+
                     } catch (error) {
                         console.error('❌ Error al enviar:', error);
                     }
                 }
-                
+
                 cashoutItem.classList.add('verified');
                 cashoutItem.querySelector('.cashout-actions').innerHTML = '<span>✓ Verificado</span>';
-                
+
                 if (sheetsSuccess) {
                     showNotification(`✅ Cash out verificado y guardado en ${cashout.company}`, 'success');
                 } else {
                     showNotification('✅ Cash out verificado', 'success');
                 }
-                
+
                 setTimeout(() => {
                     if (verificationQueueData.length === 0) {
                         verificationQueue.innerHTML = '<p>No hay cash outs pendientes de verificación.</p>';
                     }
                 }, 2000);
-                
+
             } catch (error) {
                 showNotification('Error: ' + error.message, 'error');
                 console.error('❌ Error:', error);
@@ -469,48 +459,47 @@
                 button.disabled = false;
             }
         }
-        
-        // Rechazar cash out
+
         async function rejectCashOut(e) {
             const button = e.target;
             const cashoutId = button.getAttribute('data-id');
             const cashoutItem = document.getElementById(`cashout-${cashoutId}`);
-            
+
             if (!cashoutItem) {
                 showNotification('Este cash out ya ha sido procesado', 'error');
                 return;
             }
-            
+
             if (!confirm('¿Está seguro de que desea rechazar este cash out?')) {
                 return;
             }
-            
+
             button.textContent = 'Rechazando...';
             button.disabled = true;
-            
+
             try {
                 const cashoutIndex = verificationQueueData.findIndex(item => item.id === cashoutId);
-                
+
                 if (cashoutIndex === -1) {
                     showNotification('Este cash out ya ha sido procesado', 'error');
                     cashoutItem.remove();
                     return;
                 }
-                
+
                 verificationQueueData.splice(cashoutIndex, 1);
                 saveLocalData();
-                
+
                 cashoutItem.classList.add('rejected');
                 cashoutItem.querySelector('.cashout-actions').innerHTML = '<span>✗ Rechazado</span>';
-                
+
                 showNotification('Cash out rechazado correctamente', 'success');
-                
+
                 setTimeout(() => {
                     if (verificationQueueData.length === 0) {
                         verificationQueue.innerHTML = '<p>No hay cash outs pendientes de verificación.</p>';
                     }
                 }, 2000);
-                
+
             } catch (error) {
                 showNotification('Error: ' + error.message, 'error');
                 console.error('❌ Error:', error);
@@ -518,17 +507,16 @@
                 button.disabled = false;
             }
         }
-        
-        // Función para mostrar notificaciones
+
         function showNotification(message, type) {
             notification.textContent = message;
             notification.className = `notification ${type}`;
             notification.classList.add('show');
-            
             setTimeout(() => {
                 notification.classList.remove('show');
             }, 3000);
         }
+
     </script>
 </body>
 </html>
