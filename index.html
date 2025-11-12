@@ -93,22 +93,12 @@
                 </button>
             </div>
         </div>
-
-        <div class="config-section">
-            <h3>Configuración de Google Sheets</h3>
-            <div class="form-group">
-                <label for="scriptURL">URL de Google Apps Script</label>
-                <input type="text" id="scriptURL" placeholder="Pega aquí la URL de tu script" style="width: 100%;">
-                <button id="saveScriptURL" style="margin-top: 10px;">Guardar URL</button>
-            </div>
-            <p><small>Esta URL se guardará localmente en tu navegador.</small></p>
-        </div>
     </div>
 
     <div id="notification" class="notification"></div>
 
     <script>
-        // Funciones para notificaciones push supervisor
+        // Notificación push para Supervisor
         function solicitarPermisoNotificacion() {
             if ('Notification' in window) {
                 if (Notification.permission === 'default') {
@@ -116,12 +106,11 @@
                 }
             }
         }
-
         function mostrarPushNotificacionCashOut(data) {
             if ('Notification' in window && Notification.permission === 'granted') {
                 new Notification('Nuevo Cash Out registrado', {
                     body: `Operador: ${data.operatorName}\nCódigo: ${data.operationCode}\nCompañía: ${data.company}`,
-                    icon: 'https://cdn-icons-png.flaticon.com/512/4315/4315445.png'
+                    icon: 'https://cdn-icons-png.flaticon.com/512/4315/4315445.png' // Cambia por tu icono preferido
                 });
             }
         }
@@ -135,32 +124,26 @@
         const cashoutForm = document.getElementById('cashoutForm');
         const verificationQueue = document.getElementById('verificationQueue');
         const connectionStatus = document.getElementById('connectionStatus');
-        const scriptURLInput = document.getElementById('scriptURL');
-        const saveScriptURLBtn = document.getElementById('saveScriptURL');
         const notification = document.getElementById('notification');
         const queueCount = document.getElementById('queueCount');
         const lastUpdate = document.getElementById('lastUpdate');
         const forceRefresh = document.getElementById('forceRefresh');
         const clearLocalData = document.getElementById('clearLocalData');
-        
+
         // Almacenamiento local para la cola de verificación
         let verificationQueueData = [];
-        
+
         // Inicializar la aplicación
         initApp();
-        
+
         function initApp() {
             loadLocalData();
-            const savedScriptURL = localStorage.getItem('cashoutScriptURL');
-            if (savedScriptURL) {
-                scriptURLInput.value = savedScriptURL;
-            }
             updateQueueCount();
             updateLastUpdateTime();
             forceRefresh.addEventListener('click', loadVerificationQueue);
             clearLocalData.addEventListener('click', clearLocalStorage);
         }
-        
+
         function clearLocalStorage() {
             if (confirm('¿Está seguro de que desea limpiar todos los datos locales? Esto eliminará todos los cash outs pendientes.')) {
                 localStorage.removeItem('cashoutQueue');
@@ -170,7 +153,7 @@
                 showNotification('Datos locales limpiados correctamente', 'success');
             }
         }
-        
+
         function loadLocalData() {
             const savedQueue = localStorage.getItem('cashoutQueue');
             if (savedQueue) {
@@ -185,35 +168,23 @@
                 console.log('ℹ️ No hay datos guardados en localStorage');
             }
         }
-        
+
         function saveLocalData() {
             localStorage.setItem('cashoutQueue', JSON.stringify(verificationQueueData));
             updateQueueCount();
             updateLastUpdateTime();
         }
-        
+
         function updateQueueCount() {
             if (queueCount) {
                 queueCount.textContent = verificationQueueData.length;
             }
         }
-        
         function updateLastUpdateTime() {
             if (lastUpdate) {
                 lastUpdate.textContent = new Date().toLocaleTimeString();
             }
         }
-
-        // Guardar URL
-        saveScriptURLBtn.addEventListener('click', () => {
-            const url = scriptURLInput.value;
-            if (url) {
-                localStorage.setItem('cashoutScriptURL', url);
-                showNotification('URL guardada correctamente', 'success');
-            } else {
-                showNotification('Por favor, ingresa una URL válida', 'error');
-            }
-        });
 
         // Cambiar entre modos
         operatorBtn.addEventListener('click', () => {
@@ -229,6 +200,17 @@
             if (!isAuthenticated) {
                 const password = prompt('Ingrese la contraseña de supervisor:');
                 if (password === 'superctrl2023') {
+                    // Solicitar la URL de Google Apps Script SOLO si no existe ya
+                    let cashoutScriptURL = localStorage.getItem('cashoutScriptURL');
+                    if (!cashoutScriptURL) {
+                        cashoutScriptURL = prompt('Ingrese la URL de Google Apps Script para exportar los datos:');
+                        if (!cashoutScriptURL || !/^https?:\/\/.+/.test(cashoutScriptURL)) {
+                            showNotification('URL inválida. No se guardó.', 'error');
+                            return;
+                        }
+                        localStorage.setItem('cashoutScriptURL', cashoutScriptURL);
+                        showNotification('URL de Google Apps Script guardada.', 'success');
+                    }
                     sessionStorage.setItem('supervisorAuth', 'true');
                     showNotification('✅ Acceso autorizado', 'success');
                     solicitarPermisoNotificacion();
@@ -321,7 +303,6 @@
                 showNotification('Error al cargar la cola de verificación', 'error');
             }
         }
-        
         function renderVerificationQueue() {
             verificationQueue.innerHTML = '';
             console.log('🎨 Renderizando cola con datos:', verificationQueueData);
@@ -375,7 +356,8 @@
         }
 
         async function verifyCashOut(e) {
-            const scriptURL = scriptURLInput.value;
+            // Cambia aquí el origen de la url
+            const scriptURL = localStorage.getItem('cashoutScriptURL') || '';
 
             const button = e.target;
             const cashoutId = button.getAttribute('data-id');
