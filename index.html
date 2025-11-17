@@ -229,13 +229,33 @@ async function cargarCola() {
             const div = document.createElement('div');
             div.className = 'cashout-item';
             div.innerHTML = `
-                <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
+              <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
                 <div>Operador: ${item.operatorName}</div>
                 <div>Fecha: ${formatoPeru(item.timestamp)}</div>
-                <input type="text" placeholder="Su nombre" class="supervisor-name" id="supervisor-${item.row}">
+                <select class="supervisor-name" id="supervisor-${item.row}">
+                    <option value="">Seleccione supervisor</option>
+                    <option value="Micaela Albareda">Micaela Albareda</option>
+                    <option value="Micaela Zevallos">Micaela Zevallos</option>
+                    <option value="Abel Juscamaita">Abel Juscamaita</option>
+                    <option value="Nicole Tello">Nicole Tello</option>
+                    <option value="Amelia Ureta">Amelia Ureta</option>
+                    <option value="Otro">Otro...</option>
+                </select>
+                <input type="text" class="supervisor-name-manual" id="supervisor-manual-${item.row}" placeholder="Nombre manual (si eligió 'Otro')" style="display:none;margin-top:8px;"/>
                 <button onclick="verificarCashout(${item.row})">Verificar</button>
                 <button onclick="rechazarCashout(${item.row})">Rechazar</button>
-            `;
+                `;
+
+                // Control para mostrar el campo manual solo si selecciona "Otro"
+                div.querySelector(`#supervisor-${item.row}`).addEventListener('change', function() {
+                const manualInput = div.querySelector(`#supervisor-manual-${item.row}`);
+                if (this.value === "Otro") {
+                    manualInput.style.display = '';
+                } else {
+                    manualInput.style.display = 'none';
+                    manualInput.value = '';
+                }
+});
             verificationQueue.appendChild(div);
         });
     } catch (err) {
@@ -245,18 +265,24 @@ async function cargarCola() {
 document.getElementById('forceRefresh').onclick = cargarCola;
 
 window.verificarCashout = async function(row) {
-    const supervisorName = document.getElementById('supervisor-' + row).value.trim();
-    if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
-    await fetch(`${SCRIPT_URL}?row=${row}&estado=verificado&supervisorName=${encodeURIComponent(supervisorName)}`);
-    cargarCola();
-    showNotification("¡Cash out verificado!");
+  const supervisorSelect = document.getElementById('supervisor-' + row);
+  const supervisorManual = document.getElementById('supervisor-manual-' + row);
+  let supervisorName = supervisorSelect.value;
+  if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
+  if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
+  await fetch(`${SCRIPT_URL}?row=${row}&estado=verificado&supervisorName=${encodeURIComponent(supervisorName)}`);
+  cargarCola();
+  showNotification("¡Cash out verificado!");
 }
 window.rechazarCashout = async function(row) {
-    const supervisorName = document.getElementById('supervisor-' + row).value.trim();
-    if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
-    await fetch(`${SCRIPT_URL}?row=${row}&estado=rechazado&supervisorName=${encodeURIComponent(supervisorName)}`);
-    cargarCola();
-    showNotification("Cash out rechazado.");
+  const supervisorSelect = document.getElementById('supervisor-' + row);
+  const supervisorManual = document.getElementById('supervisor-manual-' + row);
+  let supervisorName = supervisorSelect.value;
+  if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
+  if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
+  await fetch(`${SCRIPT_URL}?row=${row}&estado=rechazado&supervisorName=${encodeURIComponent(supervisorName)}`);
+  cargarCola();
+  showNotification("Cash out rechazado.");
 }
 
 // Si ya está autenticado como supervisor al cargar
