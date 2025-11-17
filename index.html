@@ -220,44 +220,48 @@ async function cargarCola() {
     try {
         const resp = await fetch(SCRIPT_URL);
         const items = await resp.json();
-        verificationQueue.innerHTML = "";
-        if (items.length === 0) {
-            verificationQueue.innerHTML = '<p>No hay cash outs pendientes de verificación.</p>';
-            return;
-        }
-        items.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'cashout-item';
-            div.innerHTML = `
-              <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
-                <div>Operador: ${item.operatorName}</div>
-                <div>Fecha: ${formatoPeru(item.timestamp)}</div>
-                <select class="supervisor-name" id="supervisor-${item.row}">
-                    <option value="">Seleccione supervisor</option>
-                    <option value="Micaela Albareda">Micaela Albareda</option>
-                    <option value="Micaela Zevallos">Micaela Zevallos</option>
-                    <option value="Abel Juscamaita">Abel Juscamaita</option>
-                    <option value="Nicole Tello">Nicole Tello</option>
-                    <option value="Amelia Ureta">Amelia Ureta</option>
-                    <option value="Otro">Otro...</option>
-                </select>
-                <input type="text" class="supervisor-name-manual" id="supervisor-manual-${item.row}" placeholder="Nombre manual (si eligió 'Otro')" style="display:none;margin-top:8px;"/>
-                <button onclick="verificarCashout(${item.row})">Verificar</button>
-                <button onclick="rechazarCashout(${item.row})">Rechazar</button>
-                `;
+        const fragment = document.createDocumentFragment();
 
-                // Control para mostrar el campo manual solo si selecciona "Otro"
+        if (items.length === 0) {
+            const p = document.createElement('p');
+            p.textContent = "No hay cash outs pendientes de verificación.";
+            fragment.appendChild(p);
+        } else {
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'cashout-item';
+                div.innerHTML = `
+                  <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
+                  <div>Operador: ${item.operatorName}</div>
+                  <div>Fecha: ${formatoPeru(item.timestamp)}</div>
+                  <select class="supervisor-name" id="supervisor-${item.row}">
+                      <option value="">Seleccione supervisor</option>
+                      <option value="Micaela Albareda">Micaela Albareda</option>
+                      <option value="Micaela Zevallos">Micaela Zevallos</option>
+                      <option value="Abel Juscamaita">Abel Juscamaita</option>
+                      <option value="Nicole Tello">Nicole Tello</option>
+                      <option value="Amelia Ureta">Amelia Ureta</option>
+                      <option value="Otro">Otro...</option>
+                  </select>
+                  <input type="text" class="supervisor-name-manual" id="supervisor-manual-${item.row}" placeholder="Nombre manual (si eligió 'Otro')" style="display:none;margin-top:8px;"/>
+                  <button onclick="verificarCashout(${item.row})">Verificar</button>
+                  <button onclick="rechazarCashout(${item.row})">Rechazar</button>
+                `;
+                // Control para mostrar campo manual solo si selecciona "Otro"
                 div.querySelector(`#supervisor-${item.row}`).addEventListener('change', function() {
-                const manualInput = div.querySelector(`#supervisor-manual-${item.row}`);
-                if (this.value === "Otro") {
-                    manualInput.style.display = '';
-                } else {
-                    manualInput.style.display = 'none';
-                    manualInput.value = '';
-                }
-});
-            verificationQueue.appendChild(div);
-        });
+                    const manualInput = div.querySelector(`#supervisor-manual-${item.row}`);
+                    if (this.value === "Otro") {
+                        manualInput.style.display = '';
+                    } else {
+                        manualInput.style.display = 'none';
+                        manualInput.value = '';
+                    }
+                });
+                fragment.appendChild(div);
+            });
+        }
+        verificationQueue.innerHTML = "";
+        verificationQueue.appendChild(fragment);
     } catch (err) {
         verificationQueue.innerHTML = '<p>Error al cargar la cola.</p>';
     }
