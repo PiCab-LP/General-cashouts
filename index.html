@@ -99,11 +99,7 @@
         const operatorNameInput = document.getElementById('operatorName');
         if (operatorNameInput) {
             operatorNameInput.value = nombre || '';
-            if (nombre && nombre.trim() !== '') {
-                operatorNameInput.readOnly = true;   // bloqueado hasta cerrar sesión operador
-            } else {
-                operatorNameInput.readOnly = false;
-            }
+            operatorNameInput.readOnly = !!(nombre && nombre.trim() !== '');
         }
     }
 
@@ -126,40 +122,6 @@
         showNotification('Sesión de operador cerrada. Nuevo operador autenticado.', 'success');
     });
 
-    // ---- Permiso y push notificación supervisor ----
-    function solicitarPermisoNotificacion() {
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
-    }
-    function mostrarNotificacionSupervisor(data) {
-        if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Nuevo Cash Out registrado', {
-                body: `Operador: ${data.operatorName}\nCódigo: ${data.operationCode}\nCompañía: ${data.company}`,
-                icon: 'https://cdn-icons-png.flaticon.com/512/4315/4315445.png'
-            });
-        }
-    }
-
-    // Polling notificaciones supervisor entre PCs
-    let lastCashoutCount = null;
-    async function pollingSupervisor() {
-        if (sessionStorage.getItem('supervisorAuth') !== 'true') return;
-        try {
-            const resp = await fetch(SCRIPT_URL);
-            const items = await resp.json();
-            if (lastCashoutCount !== null && items.length > lastCashoutCount) {
-                mostrarNotificacionSupervisor({
-                    operationCode: items[0].operationCode,
-                    operatorName: items[0].operatorName,
-                    company: items[0].company
-                });
-            }
-            lastCashoutCount = items.length;
-        } catch (e) {}
-        setTimeout(pollingSupervisor, 8000);
-    }
-
     // Auto-refresh de cola en modo supervisor
     let colaAutoRefresh = null;
     function iniciarAutoRefreshCola() {
@@ -168,7 +130,7 @@
             if (supervisorSection.style.display === 'block') {
                 cargarCola();
             }
-        }, 50000);
+        }, 50000); // cada 50 segundos
     }
     function detenerAutoRefreshCola() {
         if (colaAutoRefresh) {
@@ -193,13 +155,10 @@
             if (password === 'superctrl2023') {
                 sessionStorage.setItem('supervisorAuth', 'true');
                 showNotification('✅ Acceso autorizado a modo supervisor', 'success');
-                solicitarPermisoNotificacion();
             } else {
                 showNotification('❌ Contraseña incorrecta', 'error');
                 return;
             }
-        } else {
-            solicitarPermisoNotificacion();
         }
         supervisorBtn.classList.add('active');
         operatorBtn.classList.remove('active');
@@ -207,7 +166,6 @@
         operatorSection.style.display = 'none';
         cargarCola();
         iniciarAutoRefreshCola();
-        pollingSupervisor();
     });
 
     // Formato Perú para fechas
@@ -226,7 +184,7 @@
         return fecha.toLocaleString('es-PE', opciones).replace(',', '');
     }
 
-    // Notificación visual
+    // Notificación visual en pantalla (MANTIENE INTACTO)
     function showNotification(msg, type="success") {
         notification.textContent = msg;
         notification.style.background = type === "error" ? "var(--error)" : "var(--secondary)";
@@ -258,12 +216,20 @@
         }
     });
 
-    // Mostrar cola de verificación
+    // Mostrar cola de verificación (ordenada por timestamp, más recientes primero)
     async function cargarCola() {
         verificationQueue.innerHTML = "<p>Cargando cash outs pendientes...</p>";
         try {
             const resp = await fetch(SCRIPT_URL);
-            const items = await resp.json();
+            let items = await resp.json();
+
+            // Ordenar por timestamp descendente (más reciente primero)
+            items.sort((a, b) => {
+                const fechaA = new Date(a.timestamp);
+                const fechaB = new Date(b.timestamp);
+                return fechaB - fechaA;
+            });
+
             const fragment = document.createDocumentFragment();
 
             if (items.length === 0) {
@@ -324,7 +290,7 @@
       await fetch(`${SCRIPT_URL}?row=${row}&estado=verificado&supervisorName=${encodeURIComponent(supervisorName)}`);
       cargarCola();
       showNotification("¡Cash out verificado!");
-    }
+    };
 
     window.rechazarCashout = async function(row) {
       const supervisorSelect = document.getElementById('supervisor-' + row);
@@ -335,12 +301,11 @@
       await fetch(`${SCRIPT_URL}?row=${row}&estado=rechazado&supervisorName=${encodeURIComponent(supervisorName)}`);
       cargarCola();
       showNotification("Cash out rechazado.");
-    }
+    };
 
     // Al cargar
     if (sessionStorage.getItem('supervisorAuth') === 'true') {
         iniciarAutoRefreshCola();
-        pollingSupervisor();
     }
 
     pedirNombreOperadorSiHaceFalta();
