@@ -21,6 +21,23 @@ body {
     align-items: center;
     justify-content: center;
 }
+
+/* Botón de cerrar sesión operador arriba a la derecha del body */
+.logout-global {
+    position: fixed;
+    top: 18px;
+    right: 24px;
+    display: flex;
+    gap: 10px;
+    z-index: 1001;
+}
+
+.logout-global .role-btn.logout {
+    width: auto;
+    padding: 10px 16px;
+    font-size: 14px;
+}
+
 .container {
     max-width: 550px;
     margin: 0 auto;
@@ -32,7 +49,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start; /* cambia aquí */
+    justify-content: flex-start;
 }
 h1 { color: var(--secondary); text-align: center; font-weight: bold; margin-bottom: 2px;}
 h2 { color: var(--primary); margin-bottom: 14px; text-align: center;}
@@ -49,7 +66,7 @@ label { font-weight: bold; color: var(--accent); text-align: center; font-size: 
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 21px; /* Más espacio entre cuadros */
+    margin-bottom: 21px;
 }
 input, select {
     width: 98%;
@@ -82,11 +99,38 @@ button {
     width: 98%;
 }
 button:hover { background: #13b2c4;}
-.role-selector { display: flex; gap: 14px; justify-content: center; margin-bottom: 22px; }
-.role-btn { background: #23395d; color: var(--secondary); font-weight: bold; border: none; padding: 13px 22px;}
-.role-btn.active { background: var(--secondary); color: #1b222f; box-shadow: 0 2px 8px #26c6da44;}
-.logout { background: var(--accent); color: #fff;}
-.form-section { margin-bottom: 33px; width: 100%;}
+.role-selector {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+}
+.role-btn {
+    background: #23395d;
+    color: var(--secondary);
+    font-weight: bold;
+    border: none;
+    padding: 13px 22px;
+    width: auto;
+}
+.role-btn.active {
+    background: var(--secondary);
+    color: #1b222f;
+    box-shadow: 0 2px 8px #26c6da44;
+}
+
+/* Estilo solicitado para logout */
+.logout {
+    background: var(--accent);
+    background: rgb(214, 66, 66);
+    color: #fff;
+}
+
+.form-section {
+    margin-bottom: 33px;
+    width: 100%;
+}
 .cashout-item {
     background: #232b35;
     border-radius: var(--border-radius);
@@ -97,11 +141,11 @@ button:hover { background: #13b2c4;}
 }
 
 #verificationQueue.queue {
-    max-height: 420px;  /* Puedes ajustar el alto */
+    max-height: 420px;
     overflow-y: auto;
     width: 100%;
     margin-bottom: 12px;
-    padding-right: 8px; /* para evitar que se tape el scroll */
+    padding-right: 8px;
 }
 .cashout-item div { margin-bottom:5px;}
 .queue { margin-top: 8px;}

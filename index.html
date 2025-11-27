@@ -7,6 +7,14 @@
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+
+    <!-- Botón de Cerrar Sesión Operador fuera del cuadro, arriba derecha -->
+    <div class="logout-global">
+        <button class="role-btn logout" id="operatorLogoutBtn">
+            Cerrar Sesión Operador
+        </button>
+    </div>
+
     <div class="container">
         <header>
             <h1>Sistema de Registro de Cash Outs</h1>
@@ -16,7 +24,6 @@
         <div class="role-selector">
             <button class="role-btn operator active" id="operatorBtn">Modo Operador</button>
             <button class="role-btn supervisor" id="supervisorBtn">🔒 Modo Supervisor</button>
-            <button class="role-btn logout" id="logoutBtn" style="display: none;">Cerrar Sesión</button>
         </div>
 
         <!-- Sección operador -->
@@ -45,258 +52,300 @@
                 </div>
                 <button type="submit">Enviar para verificación</button>
             </form>
-            <div id="operatorSuccess" class="success-message">¡Cash out registrado correctamente! Esperando verificación del supervisor.</div>
-            <div id="operatorError" class="error-message">Ha ocurrido un error al registrar el cash out. Por favor, inténtalo de nuevo.</div>
+            <div id="operatorSuccess" class="success-message">
+                ¡Cash out registrado correctamente! Esperando verificación del supervisor.
+            </div>
+            <div id="operatorError" class="error-message">
+                Ha ocurrido un error al registrar el cash out. Por favor, inténtalo de nuevo.
+            </div>
         </div>
 
         <!-- Sección supervisor -->
         <div id="supervisorSection" class="form-section" style="display: none;">
             <h2>Cola de Verificación</h2>
             <p>Cash outs pendientes de segunda verificación:</p>
-            <div id="verificationQueue" class="queue"><p>Cargando cash outs pendientes...</p></div>
+            <div id="verificationQueue" class="queue">
+                <p>Cargando cash outs pendientes...</p>
+            </div>
             <div id="supervisorSuccess" class="success-message">¡Cash out verificado!</div>
             <div id="supervisorError" class="error-message">Error al procesar el cash out.</div>
             <div style="margin-top: 20px; text-align: center;">
-            <button id="forceRefresh" style="width: auto; display: inline-block; padding: 10px 22px;">🔄 Actualizar Cola</button>
+                <button id="forceRefresh" style="width: auto; display: inline-block; padding: 10px 22px;">
+                    🔄 Actualizar Cola
+                </button>
             </div>
         </div>
     </div>
+
     <div id="notification" class="notification"></div>
 
     <script>
-// URL central del Apps Script
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzL2wlxsKRI3mDffTl-IPm0aqE_qjygcyaPnT3J8zfrC1TDzcj1BNpBI_wXsQu1PsrmXQ/exec";
-const operatorBtn = document.getElementById('operatorBtn');
-const supervisorBtn = document.getElementById('supervisorBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const operatorSection = document.getElementById('operatorSection');
-const supervisorSection = document.getElementById('supervisorSection');
-const cashoutForm = document.getElementById('cashoutForm');
-const verificationQueue = document.getElementById('verificationQueue');
-const notification = document.getElementById('notification');
+    // URL central del Apps Script
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzL2wlxsKRI3mDffTl-IPm0aqE_qjygcyaPnT3J8zfrC1TDzcj1BNpBI_wXsQu1PsrmXQ/exec";
 
-// Permiso y push notificación supervisor
-function solicitarPermisoNotificacion() {
-    if ('Notification' in window) {
-        if (Notification.permission === 'default') {
+    const operatorBtn = document.getElementById('operatorBtn');
+    const supervisorBtn = document.getElementById('supervisorBtn');
+    const operatorSection = document.getElementById('operatorSection');
+    const supervisorSection = document.getElementById('supervisorSection');
+    const cashoutForm = document.getElementById('cashoutForm');
+    const verificationQueue = document.getElementById('verificationQueue');
+    const notification = document.getElementById('notification');
+    const operatorLogoutBtn = document.getElementById('operatorLogoutBtn');
+
+    const OPERATOR_NAME_KEY = 'operatorNameTurno';
+
+    // ---- Nombre de operador (sessionStorage + readonly) ----
+    function actualizarUIConNombreOperador(nombre) {
+        const operatorNameInput = document.getElementById('operatorName');
+        if (operatorNameInput) {
+            operatorNameInput.value = nombre || '';
+            if (nombre && nombre.trim() !== '') {
+                operatorNameInput.readOnly = true;   // bloqueado hasta cerrar sesión operador
+            } else {
+                operatorNameInput.readOnly = false;
+            }
+        }
+    }
+
+    function pedirNombreOperadorSiHaceFalta() {
+        let nombre = sessionStorage.getItem(OPERATOR_NAME_KEY);
+        if (!nombre) {
+            nombre = prompt('¿Cuál es tu nombre de Operador? Este será tu nombre durante el resto del turno:');
+            if (nombre) nombre = nombre.trim();
+            if (!nombre) return pedirNombreOperadorSiHaceFalta();
+            sessionStorage.setItem(OPERATOR_NAME_KEY, nombre);
+        }
+        actualizarUIConNombreOperador(nombre);
+    }
+
+    // Cerrar sesión de operador (cambiar de persona)
+    operatorLogoutBtn.addEventListener('click', () => {
+        sessionStorage.removeItem(OPERATOR_NAME_KEY);
+        actualizarUIConNombreOperador('');
+        pedirNombreOperadorSiHaceFalta();
+        showNotification('Sesión de operador cerrada. Nuevo operador autenticado.', 'success');
+    });
+
+    // ---- Permiso y push notificación supervisor ----
+    function solicitarPermisoNotificacion() {
+        if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
     }
-}
-function mostrarNotificacionSupervisor(data) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Nuevo Cash Out registrado', {
-            body: `Operador: ${data.operatorName}\nCódigo: ${data.operationCode}\nCompañía: ${data.company}`,
-            icon: 'https://cdn-icons-png.flaticon.com/512/4315/4315445.png'
-        });
-    }
-}
-
-// Polling notificaciones supervisor entre PCs
-let lastCashoutCount = null;
-async function pollingSupervisor() {
-    if (sessionStorage.getItem('supervisorAuth') !== 'true') return;
-    try {
-        const resp = await fetch(SCRIPT_URL);
-        const items = await resp.json();
-        if (lastCashoutCount !== null && items.length > lastCashoutCount) {
-            mostrarNotificacionSupervisor({
-                operationCode: items[0].operationCode,
-                operatorName: items[0].operatorName,
-                company: items[0].company
+    function mostrarNotificacionSupervisor(data) {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Nuevo Cash Out registrado', {
+                body: `Operador: ${data.operatorName}\nCódigo: ${data.operationCode}\nCompañía: ${data.company}`,
+                icon: 'https://cdn-icons-png.flaticon.com/512/4315/4315445.png'
             });
         }
-        lastCashoutCount = items.length;
-    } catch (e) {}
-    setTimeout(pollingSupervisor, 8000); // revisa cada 8 segundos
-}
-
-// Auto-refresh de cola en modo supervisor
-let colaAutoRefresh = null;
-function iniciarAutoRefreshCola() {
-    if (colaAutoRefresh) return;
-    colaAutoRefresh = setInterval(() => {
-        if (supervisorSection.style.display === 'block') {
-            cargarCola();
-        }
-    }, 50000); // cada 50 segundos
-}
-function detenerAutoRefreshCola() {
-    if (colaAutoRefresh) {
-        clearInterval(colaAutoRefresh);
-        colaAutoRefresh = null;
     }
-}
 
-// Centrado y cambio de modo
-operatorBtn.addEventListener('click', () => {
-    operatorBtn.classList.add('active');
-    supervisorBtn.classList.remove('active');
-    operatorSection.style.display = 'block';
-    supervisorSection.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    detenerAutoRefreshCola();
-});
-supervisorBtn.addEventListener('click', () => {
-    const isAuthenticated = sessionStorage.getItem('supervisorAuth') === 'true';
-    if (!isAuthenticated) {
-        const password = prompt('Ingrese la contraseña de supervisor:');
-        if (password === 'superctrl2023') {
-            sessionStorage.setItem('supervisorAuth', 'true');
-            showNotification('✅ Acceso autorizado a modo supervisor', 'success');
-            solicitarPermisoNotificacion();
-        } else {
-            showNotification('❌ Contraseña incorrecta', 'error');
-            return;
-        }
-    } else {
-        solicitarPermisoNotificacion();
-    }
-    supervisorBtn.classList.add('active');
-    operatorBtn.classList.remove('active');
-    supervisorSection.style.display = 'block';
-    operatorSection.style.display = 'none';
-    logoutBtn.style.display = 'inline-block';
-    cargarCola();
-    iniciarAutoRefreshCola();
-    pollingSupervisor();
-});
-logoutBtn.addEventListener('click', () => {
-    sessionStorage.removeItem('supervisorAuth');
-    operatorBtn.click();
-    showNotification('Sesión supervisor cerrada', 'success');
-    detenerAutoRefreshCola();
-});
-
-// Formato Perú para fechas
-function formatoPeru(fechaIso) {
-    const fecha = new Date(fechaIso);
-    const opciones = {
-        timeZone: 'America/Lima',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    };
-    return fecha.toLocaleString('es-PE', opciones).replace(',', '');
-}
-
-// Notificación visual elegante
-function showNotification(msg, type="success") {
-    notification.textContent = msg;
-    notification.style.background = type === "error" ? "var(--error)" : "var(--secondary)";
-    notification.style.color = "#19324a";
-    notification.classList.add('show');
-    setTimeout(() => notification.classList.remove('show'), 3200);
-}
-
-// Registrar cashout - método GET
-cashoutForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    document.getElementById('operatorSuccess').style.display = 'none';
-    document.getElementById('operatorError').style.display = 'none';
-    try {
-        const operationCode = document.getElementById('operationCode').value;
-        const operatorName = document.getElementById('operatorName').value;
-        const company = document.getElementById('company').value;
-        const url = `${SCRIPT_URL}?operationCode=${encodeURIComponent(operationCode)}&operatorName=${encodeURIComponent(operatorName)}&company=${encodeURIComponent(company)}`;
-        await fetch(url);
-        document.getElementById('operatorSuccess').style.display = '';
-        showNotification("¡Cash out enviado correctamente!", "success");
-        cashoutForm.reset();
-        cargarCola();
-    } catch (err) {
-        document.getElementById('operatorError').style.display = '';
-        showNotification("Error al subir cash out.", "error");
-    }
-});
-
-// Mostrar cola de verificación
-async function cargarCola() {
-    verificationQueue.innerHTML = "<p>Cargando cash outs pendientes...</p>";
-    try {
-        const resp = await fetch(SCRIPT_URL);
-        const items = await resp.json();
-        const fragment = document.createDocumentFragment();
-
-        if (items.length === 0) {
-            const p = document.createElement('p');
-            p.textContent = "No hay cash outs pendientes de verificación.";
-            fragment.appendChild(p);
-        } else {
-            items.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'cashout-item';
-                div.innerHTML = `
-                  <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
-                  <div>Operador: ${item.operatorName}</div>
-                  <div>Fecha: ${formatoPeru(item.timestamp)}</div>
-                  <select class="supervisor-name" id="supervisor-${item.row}">
-                      <option value="">Seleccione supervisor</option>
-                      <option value="Micaela Albareda">Micaela Albareda</option>
-                      <option value="Micaela Zevallos">Micaela Zevallos</option>
-                      <option value="Abel Juscamaita">Abel Juscamaita</option>
-                      <option value="Nicole Tello">Nicole Tello</option>
-                      <option value="Brandy Hora">Brandy Hora</option>
-                      <option value="Otro">Otro...</option>
-                  </select>
-                  <input type="text" class="supervisor-name-manual" id="supervisor-manual-${item.row}" placeholder="Nombre manual (si eligió 'Otro')" style="display:none;margin-top:8px;"/>
-                  <button onclick="verificarCashout(${item.row})">Verificar</button>
-                  <button onclick="rechazarCashout(${item.row})">Rechazar</button>
-                `;
-                // Control para mostrar campo manual solo si selecciona "Otro"
-                div.querySelector(`#supervisor-${item.row}`).addEventListener('change', function() {
-                    const manualInput = div.querySelector(`#supervisor-manual-${item.row}`);
-                    if (this.value === "Otro") {
-                        manualInput.style.display = '';
-                    } else {
-                        manualInput.style.display = 'none';
-                        manualInput.value = '';
-                    }
+    // Polling notificaciones supervisor entre PCs
+    let lastCashoutCount = null;
+    async function pollingSupervisor() {
+        if (sessionStorage.getItem('supervisorAuth') !== 'true') return;
+        try {
+            const resp = await fetch(SCRIPT_URL);
+            const items = await resp.json();
+            if (lastCashoutCount !== null && items.length > lastCashoutCount) {
+                mostrarNotificacionSupervisor({
+                    operationCode: items[0].operationCode,
+                    operatorName: items[0].operatorName,
+                    company: items[0].company
                 });
-                fragment.appendChild(div);
-            });
-        }
-        verificationQueue.innerHTML = "";
-        verificationQueue.appendChild(fragment);
-    } catch (err) {
-        verificationQueue.innerHTML = '<p>Error al cargar la cola.</p>';
+            }
+            lastCashoutCount = items.length;
+        } catch (e) {}
+        setTimeout(pollingSupervisor, 8000);
     }
-}
-document.getElementById('forceRefresh').onclick = cargarCola;
 
-window.verificarCashout = async function(row) {
-  const supervisorSelect = document.getElementById('supervisor-' + row);
-  const supervisorManual = document.getElementById('supervisor-manual-' + row);
-  let supervisorName = supervisorSelect.value;
-  if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
-  if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
-  await fetch(`${SCRIPT_URL}?row=${row}&estado=verificado&supervisorName=${encodeURIComponent(supervisorName)}`);
-  cargarCola();
-  showNotification("¡Cash out verificado!");
-}
-window.rechazarCashout = async function(row) {
-  const supervisorSelect = document.getElementById('supervisor-' + row);
-  const supervisorManual = document.getElementById('supervisor-manual-' + row);
-  let supervisorName = supervisorSelect.value;
-  if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
-  if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
-  await fetch(`${SCRIPT_URL}?row=${row}&estado=rechazado&supervisorName=${encodeURIComponent(supervisorName)}`);
-  cargarCola();
-  showNotification("Cash out rechazado.");
-}
+    // Auto-refresh de cola en modo supervisor
+    let colaAutoRefresh = null;
+    function iniciarAutoRefreshCola() {
+        if (colaAutoRefresh) return;
+        colaAutoRefresh = setInterval(() => {
+            if (supervisorSection.style.display === 'block') {
+                cargarCola();
+            }
+        }, 50000);
+    }
+    function detenerAutoRefreshCola() {
+        if (colaAutoRefresh) {
+            clearInterval(colaAutoRefresh);
+            colaAutoRefresh = null;
+        }
+    }
 
-// Si ya está autenticado como supervisor al cargar
-if (sessionStorage.getItem('supervisorAuth') === 'true') {
-    iniciarAutoRefreshCola();
-    pollingSupervisor();
-}
+    // Cambio de modo Operador/Supervisor
+    operatorBtn.addEventListener('click', () => {
+        operatorBtn.classList.add('active');
+        supervisorBtn.classList.remove('active');
+        operatorSection.style.display = 'block';
+        supervisorSection.style.display = 'none';
+        detenerAutoRefreshCola();
+    });
 
-operatorBtn.click();
-cargarCola();
+    supervisorBtn.addEventListener('click', () => {
+        const isAuthenticated = sessionStorage.getItem('supervisorAuth') === 'true';
+        if (!isAuthenticated) {
+            const password = prompt('Ingrese la contraseña de supervisor:');
+            if (password === 'superctrl2023') {
+                sessionStorage.setItem('supervisorAuth', 'true');
+                showNotification('✅ Acceso autorizado a modo supervisor', 'success');
+                solicitarPermisoNotificacion();
+            } else {
+                showNotification('❌ Contraseña incorrecta', 'error');
+                return;
+            }
+        } else {
+            solicitarPermisoNotificacion();
+        }
+        supervisorBtn.classList.add('active');
+        operatorBtn.classList.remove('active');
+        supervisorSection.style.display = 'block';
+        operatorSection.style.display = 'none';
+        cargarCola();
+        iniciarAutoRefreshCola();
+        pollingSupervisor();
+    });
+
+    // Formato Perú para fechas
+    function formatoPeru(fechaIso) {
+        const fecha = new Date(fechaIso);
+        const opciones = {
+            timeZone: 'America/Lima',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        };
+        return fecha.toLocaleString('es-PE', opciones).replace(',', '');
+    }
+
+    // Notificación visual
+    function showNotification(msg, type="success") {
+        notification.textContent = msg;
+        notification.style.background = type === "error" ? "var(--error)" : "var(--secondary)";
+        notification.style.color = "#19324a";
+        notification.classList.add('show');
+        setTimeout(() => notification.classList.remove('show'), 3200);
+    }
+
+    // Registrar cashout
+    cashoutForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        document.getElementById('operatorSuccess').style.display = 'none';
+        document.getElementById('operatorError').style.display = 'none';
+        try {
+            const operationCode = document.getElementById('operationCode').value;
+            const operatorName = document.getElementById('operatorName').value;
+            const company = document.getElementById('company').value;
+            const url = `${SCRIPT_URL}?operationCode=${encodeURIComponent(operationCode)}&operatorName=${encodeURIComponent(operatorName)}&company=${encodeURIComponent(company)}`;
+            await fetch(url);
+            document.getElementById('operatorSuccess').style.display = '';
+            showNotification("¡Cash out enviado correctamente!", "success");
+            cashoutForm.reset();
+            const nombreActual = sessionStorage.getItem(OPERATOR_NAME_KEY) || '';
+            actualizarUIConNombreOperador(nombreActual);
+            cargarCola();
+        } catch (err) {
+            document.getElementById('operatorError').style.display = '';
+            showNotification("Error al subir cash out.", "error");
+        }
+    });
+
+    // Mostrar cola de verificación
+    async function cargarCola() {
+        verificationQueue.innerHTML = "<p>Cargando cash outs pendientes...</p>";
+        try {
+            const resp = await fetch(SCRIPT_URL);
+            const items = await resp.json();
+            const fragment = document.createDocumentFragment();
+
+            if (items.length === 0) {
+                const p = document.createElement('p');
+                p.textContent = "No hay cash outs pendientes de verificación.";
+                fragment.appendChild(p);
+            } else {
+                items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'cashout-item';
+                    div.innerHTML = `
+                      <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
+                      <div>Operador: ${item.operatorName}</div>
+                      <div>Fecha: ${formatoPeru(item.timestamp)}</div>
+                      <select class="supervisor-name" id="supervisor-${item.row}">
+                          <option value="">Seleccione supervisor</option>
+                          <option value="Micaela Albareda">Micaela Albareda</option>
+                          <option value="Micaela Zevallos">Micaela Zevallos</option>
+                          <option value="Abel Juscamaita">Abel Juscamaita</option>
+                          <option value="Nicole Tello">Nicole Tello</option>
+                          <option value="Brandy Hora">Brandy Hora</option>
+                          <option value="Otro">Otro...</option>
+                      </select>
+                      <input type="text" class="supervisor-name-manual"
+                             id="supervisor-manual-${item.row}"
+                             placeholder="Nombre manual (si eligió 'Otro')"
+                             style="display:none;margin-top:8px;"/>
+                      <button onclick="verificarCashout(${item.row})">Verificar</button>
+                      <button onclick="rechazarCashout(${item.row})">Rechazar</button>
+                    `;
+                    div.querySelector(`#supervisor-${item.row}`).addEventListener('change', function() {
+                        const manualInput = div.querySelector(`#supervisor-manual-${item.row}`);
+                        if (this.value === "Otro") {
+                            manualInput.style.display = '';
+                        } else {
+                            manualInput.style.display = 'none';
+                            manualInput.value = '';
+                        }
+                    });
+                    fragment.appendChild(div);
+                });
+            }
+            verificationQueue.innerHTML = "";
+            verificationQueue.appendChild(fragment);
+        } catch (err) {
+            verificationQueue.innerHTML = '<p>Error al cargar la cola.</p>';
+        }
+    }
+
+    document.getElementById('forceRefresh').onclick = cargarCola;
+
+    window.verificarCashout = async function(row) {
+      const supervisorSelect = document.getElementById('supervisor-' + row);
+      const supervisorManual = document.getElementById('supervisor-manual-' + row);
+      let supervisorName = supervisorSelect.value;
+      if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
+      if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
+      await fetch(`${SCRIPT_URL}?row=${row}&estado=verificado&supervisorName=${encodeURIComponent(supervisorName)}`);
+      cargarCola();
+      showNotification("¡Cash out verificado!");
+    }
+
+    window.rechazarCashout = async function(row) {
+      const supervisorSelect = document.getElementById('supervisor-' + row);
+      const supervisorManual = document.getElementById('supervisor-manual-' + row);
+      let supervisorName = supervisorSelect.value;
+      if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
+      if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
+      await fetch(`${SCRIPT_URL}?row=${row}&estado=rechazado&supervisorName=${encodeURIComponent(supervisorName)}`);
+      cargarCola();
+      showNotification("Cash out rechazado.");
+    }
+
+    // Al cargar
+    if (sessionStorage.getItem('supervisorAuth') === 'true') {
+        iniciarAutoRefreshCola();
+        pollingSupervisor();
+    }
+
+    pedirNombreOperadorSiHaceFalta();
+    operatorBtn.click();
+    cargarCola();
     </script>
 </body>
 </html>
