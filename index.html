@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+    <!-- Nieve de fondo -->
+    <div class="snow"></div>
 
     <!-- Botón de Cerrar Sesión Operador fuera del cuadro, arriba derecha -->
     <div class="logout-global">
@@ -17,7 +19,7 @@
 
     <div class="container">
         <header>
-            <h1>Sistema de Registro de Cash Outs</h1>
+            <h1>🎄 Sistema de Registro de Cash Outs 🎄</h1>
             <p>Registro y verificación de cash outs para múltiples compañías</p>
         </header>
 
@@ -184,11 +186,18 @@
         return fecha.toLocaleString('es-PE', opciones).replace(',', '');
     }
 
-    // Notificación visual en pantalla (MANTIENE INTACTO)
+    // Notificación visual (versión navideña)
     function showNotification(msg, type="success") {
         notification.textContent = msg;
-        notification.style.background = type === "error" ? "var(--error)" : "var(--secondary)";
-        notification.style.color = "#19324a";
+
+        if (type === "error") {
+            notification.style.background = "linear-gradient(135deg, #BB2528, #ff6b6b)";
+            notification.style.color = "#fff5f5";
+        } else {
+            notification.style.background = "linear-gradient(135deg, #165B33, #74d680)";
+            notification.style.color = "#f0fff4";
+        }
+
         notification.classList.add('show');
         setTimeout(() => notification.classList.remove('show'), 3200);
     }

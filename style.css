@@ -1,16 +1,17 @@
 :root {
-    --primary: #23395d;
-    --secondary: #26c6da;
-    --accent: #26c6da;
-    --background: #181f2a;
-    --surface: #242b3c;
-    --text: #eceff4;
-    --error: #e57373;
-    --success: #43ea7a;
+    --primary: #165B33;      /* verde oscuro */
+    --secondary: #EA4630;    /* rojo navideño */
+    --accent: #F8B229;       /* dorado */
+    --background: radial-gradient(circle at top, #1b2735 0%, #090a0f 60%, #02030a 100%);
+    --surface: rgba(10, 16, 25, 0.9);
+    --text: #f9fafb;
+    --error: #ff6b6b;
+    --success: #74d680;
     --border-radius: 14px;
 }
 
 html, body { height: 100%; }
+
 body {
     background: var(--background);
     color: var(--text);
@@ -20,6 +21,34 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+}
+
+/* Nieve de fondo */
+.snow {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background-image:
+        radial-gradient(3px 3px at 10% 20%, rgba(255,255,255,0.9) 0, transparent 60%),
+        radial-gradient(3px 3px at 80% 0, rgba(255,255,255,0.8) 0, transparent 60%),
+        radial-gradient(3px 3px at 0 50%, rgba(255,255,255,0.9) 0, transparent 60%),
+        radial-gradient(2px 2px at 30% 100%, rgba(255,255,255,0.8) 0, transparent 60%),
+        radial-gradient(2px 2px at 70% 80%, rgba(255,255,255,0.7) 0, transparent 60%),
+        radial-gradient(4px 4px at 50% 30%, rgba(255,255,255,0.9) 0, transparent 60%);
+    background-size: 300px 300px;
+    animation: snowfall 18s linear infinite;
+    opacity: 0.9;
+}
+
+@keyframes snowfall {
+    0% {
+        transform: translateY(-40px);
+    }
+    100% {
+        transform: translateY(40px);
+    }
 }
 
 /* Botón de cerrar sesión operador arriba a la derecha del body */
@@ -36,31 +65,69 @@ body {
     width: auto;
     padding: 10px 16px;
     font-size: 14px;
+    background: #165B33;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.logout-global .role-btn.logout:hover {
+    background: #0d3d20;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
 .container {
-    max-width: 550px;
+    max-width: 580px;
     margin: 0 auto;
     background: var(--surface);
     border-radius: var(--border-radius);
-    box-shadow: 0 8px 32px rgba(12,15,34,.18);
-    padding: 38px 38px 38px 38px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    padding: 38px 32px 32px 32px;
     min-height: 420px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    position: relative;
+    z-index: 2;
 }
-h1 { color: var(--secondary); text-align: center; font-weight: bold; margin-bottom: 2px;}
-h2 { color: var(--primary); margin-bottom: 14px; text-align: center;}
-header p { text-align: center; }
-label { font-weight: bold; color: var(--accent); text-align: center; font-size: 1.08em;}
+
+h1 {
+    color: #fff;
+    text-align: center;
+    font-weight: 800;
+    margin-bottom: 4px;
+    text-shadow: 0 0 12px rgba(0,0,0,0.5);
+}
+
+h2 {
+    color: var(--accent);
+    margin-bottom: 14px;
+    text-align: center;
+}
+
+header p {
+    text-align: center;
+    color: #e5e7eb;
+}
+
+label {
+    font-weight: 600;
+    color: var(--accent);
+    text-align: center;
+    font-size: 1.02em;
+}
+
 .form-section, form#cashoutForm {
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
 }
+
 .form-group {
     width: 100%;
     display: flex;
@@ -68,37 +135,53 @@ label { font-weight: bold; color: var(--accent); text-align: center; font-size: 
     align-items: center;
     margin-bottom: 21px;
 }
+
 input, select {
     width: 98%;
     border-radius: var(--border-radius);
-    border: 1.8px solid #374151;
-    background: #181f2a;
+    border: 1.8px solid rgba(255, 255, 255, 0.14);
+    background: rgba(9, 10, 15, 0.92);
     color: var(--text);
     padding: 13px 15px;
     font-size: 18px;
     margin-bottom: 0;
-    transition: border-color .2s;
+    transition: border-color .2s, box-shadow .2s, transform .1s;
     text-align: center;
     box-sizing: border-box;
 }
+
 select {
     height: 48px;
 }
-input:focus, select:focus { border-color: var(--secondary);}
+
+input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(248, 178, 41, 0.35);
+    outline: none;
+    transform: translateY(-1px);
+}
+
 button {
     background: var(--secondary);
-    color: #19324a;
+    color: #fff;
     border: none;
-    font-weight: bold;
+    font-weight: 700;
     cursor: pointer;
     margin-top: 14px;
-    transition: background .18s;
+    transition: background .18s, transform .1s, box-shadow .18s;
     border-radius: var(--border-radius);
     padding: 14px 0;
-    font-size: 18px;
+    font-size: 17px;
     width: 98%;
+    box-shadow: 0 8px 18px rgba(234, 70, 48, 0.35);
 }
-button:hover { background: #13b2c4;}
+
+button:hover {
+    background: #bb2528;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 22px rgba(234, 70, 48, 0.45);
+}
+
 .role-selector {
     display: flex;
     gap: 14px;
@@ -106,38 +189,48 @@ button:hover { background: #13b2c4;}
     margin-bottom: 22px;
     flex-wrap: wrap;
 }
+
 .role-btn {
-    background: #23395d;
-    color: var(--secondary);
-    font-weight: bold;
-    border: none;
-    padding: 13px 22px;
+    background: rgba(9, 10, 15, 0.9);
+    color: #fff;
+    font-weight: 700;
+    border: 1px solid rgba(248, 178, 41, 0.2);
+    padding: 11px 18px;
     width: auto;
 }
+
 .role-btn.active {
     background: var(--secondary);
-    color: #1b222f;
-    box-shadow: 0 2px 8px #26c6da44;
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(234, 70, 48, 0.5);
 }
 
-/* Estilo solicitado para logout */
 .logout {
-    background: var(--accent);
-    background: rgb(214, 66, 66);
-    color: #fff;
+    background: #165B33;
 }
 
 .form-section {
     margin-bottom: 33px;
     width: 100%;
 }
+
 .cashout-item {
-    background: #232b35;
+    background: rgba(9, 14, 22, 0.95);
     border-radius: var(--border-radius);
     margin-bottom:16px;
     padding:16px 13px;
-    box-shadow: 0 1px 10px #0002;
+    box-shadow: 0 1px 14px rgba(0, 0, 0, 0.5);
     border-left: 4px solid var(--secondary);
+    position: relative;
+}
+
+.cashout-item::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    border: 1px dashed rgba(248, 178, 41, 0.35);
+    pointer-events: none;
 }
 
 #verificationQueue.queue {
@@ -147,11 +240,14 @@ button:hover { background: #13b2c4;}
     margin-bottom: 12px;
     padding-right: 8px;
 }
-.cashout-item div { margin-bottom:5px;}
-.queue { margin-top: 8px;}
+
+.cashout-item div { margin-bottom:5px; }
+
+.queue { margin-top: 8px; }
+
 .success-message {
-    background: var(--success);
-    color: #132f33;
+    background: linear-gradient(135deg, #165B33, #74d680);
+    color: #f0fff4;
     border-radius: var(--border-radius);
     padding: 13px;
     margin-top: 18px;
@@ -160,9 +256,10 @@ button:hover { background: #13b2c4;}
     text-align: center;
     animation: fadein .4s;
 }
+
 .error-message {
-    background: var(--error);
-    color: #181925;
+    background: linear-gradient(135deg, #BB2528, #ff6b6b);
+    color: #fff5f5;
     border-radius: var(--border-radius);
     padding: 13px;
     margin-top: 18px;
@@ -171,29 +268,32 @@ button:hover { background: #13b2c4;}
     text-align: center;
     animation: fadein .4s;
 }
+
 .notification {
     position: fixed;
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--secondary);
-    color: #19324a;
+    background: linear-gradient(135deg, #165B33, #74d680);
+    color: #f0fff4;
     padding: 16px 25px;
-    border-radius: var(--border-radius);
-    font-size: 17px;
+    border-radius: 999px;
+    font-size: 16px;
     font-weight: 700;
     z-index:1000;
-    box-shadow: 0 6px 16px #0007;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
     opacity: 0;
     transition: all .33s;
     pointer-events:none;
 }
+
 .notification.show {
     opacity: 1;
     pointer-events:all;
     transform: translate(-50%, -12px);
 }
+
 @keyframes fadein {
-    from { opacity:0;}
-    to { opacity:1;}
+    from { opacity:0; }
+    to { opacity:1; }
 }
