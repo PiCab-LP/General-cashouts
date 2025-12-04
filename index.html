@@ -55,7 +55,7 @@
                 <button type="submit">Enviar para verificación</button>
             </form>
 
-            <!-- Modal de Observación -->
+            <!-- Modal de Observación del Operador -->
             <div id="observacionModal" class="modal-overlay" style="display:none;">
                 <div class="modal-content">
                     <h3>¿Tienes alguna observación sobre este cashout?</h3>
@@ -95,6 +95,22 @@
         </div>
     </div>
 
+    <!-- Modal de Observación del Supervisor -->
+    <div id="supervisorObservacionModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h3>¿Quieres agregar algo a la observación?</h3>
+            <div id="observacionOriginalDisplay" style="background: rgba(248, 178, 41, 0.15); color: var(--accent); padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; text-align: left;"></div>
+            <div class="modal-buttons">
+                <button id="btnSupervisorObsSi" class="btn-si">SÍ</button>
+                <button id="btnSupervisorObsNo" class="btn-no">NO</button>
+            </div>
+            <div id="supervisorObsInputContainer" style="display:none; margin-top: 15px;">
+                <textarea id="supervisorObsTexto" placeholder="Escribe tu complemento aquí..." rows="3"></textarea>
+                <button id="btnProcesarConObservacion">Continuar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="notification" class="notification"></div>
 
     <script>
@@ -111,6 +127,11 @@
     const operatorLogoutBtn = document.getElementById('operatorLogoutBtn');
 
     const OPERATOR_NAME_KEY = 'operatorNameTurno';
+
+    // ========== CACHE LOCAL PARA OPTIMIZACIÓN ==========
+    let cachedItems = [];
+    let lastFetchTime = 0;
+    const CACHE_DURATION = 30000; // 30 segundos
 
     // ---- Nombre de operador (sessionStorage + readonly) ----
     function actualizarUIConNombreOperador(nombre) {
@@ -146,9 +167,12 @@
         if (colaAutoRefresh) return;
         colaAutoRefresh = setInterval(() => {
             if (supervisorSection.style.display === 'block') {
-                cargarCola();
+                // Invalidar cache cada 50 segundos para forzar recarga
+                cachedItems = [];
+                lastFetchTime = 0;
+                debounceCargarCola();
             }
-        }, 50000); // cada 50 segundos
+        }, 50000);
     }
     function detenerAutoRefreshCola() {
         if (colaAutoRefresh) {
@@ -241,100 +265,156 @@
         document.getElementById('observacionTexto').value = '';
     });
 
-    // Botón SÍ - mostrar campo de observación
+    // Botón SÍ - mostrar campo de observación (INMEDIATO)
     document.getElementById('btnObservacionSi').addEventListener('click', () => {
         document.getElementById('observacionInputContainer').style.display = 'block';
     });
 
-    // Botón NO - enviar sin observación
+    // Botón NO - enviar sin observación (CON FEEDBACK INMEDIATO)
     document.getElementById('btnObservacionNo').addEventListener('click', async () => {
+        // Deshabilitar botones para evitar doble clic
+        document.getElementById('btnObservacionSi').disabled = true;
+        document.getElementById('btnObservacionNo').disabled = true;
+        document.getElementById('btnObservacionNo').textContent = 'Enviando...';
+        
         cashoutPendiente.observacion = "";
         await enviarCashout();
+        
+        // Rehabilitar botones
+        document.getElementById('btnObservacionSi').disabled = false;
+        document.getElementById('btnObservacionNo').disabled = false;
+        document.getElementById('btnObservacionNo').textContent = 'NO';
     });
 
-    // Botón Enviar con Observación
+    // Botón Enviar con Observación (CON FEEDBACK INMEDIATO)
     document.getElementById('btnEnviarConObservacion').addEventListener('click', async () => {
         const obs = document.getElementById('observacionTexto').value.trim();
         if (!obs) {
             showNotification("Por favor, escribe una observación o selecciona NO.", "error");
             return;
         }
+        
+        // Deshabilitar botón para evitar doble clic
+        const btnEnviar = document.getElementById('btnEnviarConObservacion');
+        btnEnviar.disabled = true;
+        btnEnviar.textContent = 'Enviando...';
+        
         cashoutPendiente.observacion = obs;
         await enviarCashout();
+        
+        // Rehabilitar botón
+        btnEnviar.disabled = false;
+        btnEnviar.textContent = 'Enviar Cashout';
     });
 
-    // Función para enviar el cashout al servidor
+    // Función para enviar el cashout al servidor - OPTIMIZADA
     async function enviarCashout() {
         try {
             const { operationCode, operatorName, company, observacion } = cashoutPendiente;
+            
+            // CERRAR MODAL INMEDIATAMENTE
+            document.getElementById('observacionModal').style.display = 'none';
+            showNotification("Enviando cashout...", "success");
+            
             const url = `${SCRIPT_URL}?operationCode=${encodeURIComponent(operationCode)}&operatorName=${encodeURIComponent(operatorName)}&company=${encodeURIComponent(company)}&observacion=${encodeURIComponent(observacion)}`;
             await fetch(url);
 
-            document.getElementById('observacionModal').style.display = 'none';
             document.getElementById('operatorSuccess').style.display = '';
             showNotification("¡Cash out enviado correctamente!", "success");
             cashoutForm.reset();
             const nombreActual = sessionStorage.getItem(OPERATOR_NAME_KEY) || '';
             actualizarUIConNombreOperador(nombreActual);
+            
+            // Invalidar cache
+            cachedItems = [];
+            lastFetchTime = 0;
+            
             cargarCola();
         } catch (err) {
-            document.getElementById('observacionModal').style.display = 'none';
             document.getElementById('operatorError').style.display = '';
             showNotification("Error al subir cash out.", "error");
         }
         cashoutPendiente = null;
     }
 
-    // Mostrar cola de verificación (ordenada por timestamp, más recientes primero)
+    // ========== CARGA DE COLA OPTIMIZADA CON CACHE Y DEBOUNCE ==========
+    let cargarColaTimeout = null;
+    function debounceCargarCola() {
+        if (cargarColaTimeout) clearTimeout(cargarColaTimeout);
+        cargarColaTimeout = setTimeout(cargarCola, 300);
+    }
+
     async function cargarCola() {
+        const ahora = Date.now();
+        
+        // Si hay cache válido, usar cache
+        if (cachedItems.length > 0 && (ahora - lastFetchTime) < CACHE_DURATION) {
+            renderizarCola(cachedItems);
+            return;
+        }
+
         verificationQueue.innerHTML = "<p>Cargando cash outs pendientes...</p>";
         try {
             const resp = await fetch(SCRIPT_URL);
             let items = await resp.json();
 
-            // Ordenar por timestamp descendente (más reciente primero)
-            items.sort((a, b) => {
-                const fechaA = new Date(a.timestamp);
-                const fechaB = new Date(b.timestamp);
-                return fechaB - fechaA;
-            });
+            // Guardar en cache
+            cachedItems = items;
+            lastFetchTime = ahora;
 
-            const fragment = document.createDocumentFragment();
+            renderizarCola(items);
+        } catch (err) {
+            verificationQueue.innerHTML = '<p>Error al cargar la cola.</p>';
+        }
+    }
 
-            if (items.length === 0) {
-                const p = document.createElement('p');
-                p.textContent = "No hay cash outs pendientes de verificación.";
-                fragment.appendChild(p);
-            } else {
-                items.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'cashout-item';
-                    
-                    // Mostrar observación si existe
-                    const obsHtml = item.observacion ? `<div class="observacion-tag">📝 Observación: ${item.observacion}</div>` : '';
-                    
-                    div.innerHTML = `
-                      <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
-                      <div>Operador: ${item.operatorName}</div>
-                      <div>Fecha: ${formatoPeru(item.timestamp)}</div>
-                      ${obsHtml}
-                      <select class="supervisor-name" id="supervisor-${item.row}">
-                          <option value="">Seleccione supervisor</option>
-                          <option value="Micaela Albareda">Micaela Albareda</option>
-                          <option value="Micaela Zevallos">Micaela Zevallos</option>
-                          <option value="Abel Juscamaita">Abel Juscamaita</option>
-                          <option value="Nicole Tello">Nicole Tello</option>
-                          <option value="Amelia Ureta">Amelia Ureta</option>
-                          <option value="Otro">Otro...</option>
-                      </select>
-                      <input type="text" class="supervisor-name-manual"
-                             id="supervisor-manual-${item.row}"
-                             placeholder="Nombre manual (si eligió 'Otro')"
-                             style="display:none;margin-top:8px;"/>
-                      <button onclick="verificarCashout(${item.row})">Verificar</button>
-                      <button onclick="rechazarCashout(${item.row})">Rechazar</button>
-                    `;
-                    div.querySelector(`#supervisor-${item.row}`).addEventListener('change', function() {
+    function renderizarCola(items) {
+        // Ordenar por timestamp descendente
+        items.sort((a, b) => {
+            const fechaA = new Date(a.timestamp);
+            const fechaB = new Date(b.timestamp);
+            return fechaB - fechaA;
+        });
+
+        const fragment = document.createDocumentFragment();
+
+        if (items.length === 0) {
+            const p = document.createElement('p');
+            p.textContent = "No hay cash outs pendientes de verificación.";
+            fragment.appendChild(p);
+        } else {
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'cashout-item';
+                
+                const obsHtml = item.observacion ? `<div class="observacion-tag">📝 Observación: ${item.observacion}</div>` : '';
+                
+                div.innerHTML = `
+                  <div><strong>${item.operationCode}</strong> <span>${item.company}</span></div>
+                  <div>Operador: ${item.operatorName}</div>
+                  <div>Fecha: ${formatoPeru(item.timestamp)}</div>
+                  ${obsHtml}
+                  <select class="supervisor-name" id="supervisor-${item.row}">
+                      <option value="">Seleccione supervisor</option>
+                      <option value="Micaela Albareda">Micaela Albareda</option>
+                      <option value="Micaela Zevallos">Micaela Zevallos</option>
+                      <option value="Abel Juscamaita">Abel Juscamaita</option>
+                      <option value="Nicole Tello">Nicole Tello</option>
+                      <option value="Amelia Ureta">Amelia Ureta</option>
+                      <option value="Otro">Otro...</option>
+                  </select>
+                  <input type="text" class="supervisor-name-manual"
+                         id="supervisor-manual-${item.row}"
+                         placeholder="Nombre manual (si eligió 'Otro')"
+                         style="display:none;margin-top:8px;"/>
+                  <button onclick="verificarCashout(${item.row})">Verificar</button>
+                  <button onclick="rechazarCashout(${item.row})">Rechazar</button>
+                `;
+                
+                // Event listener con delegación
+                const selectElement = div.querySelector(`#supervisor-${item.row}`);
+                if (selectElement) {
+                    selectElement.addEventListener('change', function() {
                         const manualInput = div.querySelector(`#supervisor-manual-${item.row}`);
                         if (this.value === "Otro") {
                             manualInput.style.display = '';
@@ -343,39 +423,160 @@
                             manualInput.value = '';
                         }
                     });
-                    fragment.appendChild(div);
-                });
-            }
-            verificationQueue.innerHTML = "";
-            verificationQueue.appendChild(fragment);
-        } catch (err) {
-            verificationQueue.innerHTML = '<p>Error al cargar la cola.</p>';
+                }
+                
+                fragment.appendChild(div);
+            });
         }
+        
+        verificationQueue.innerHTML = "";
+        verificationQueue.appendChild(fragment);
     }
 
-    document.getElementById('forceRefresh').onclick = cargarCola;
+    // Botón de refresh manual - OPTIMIZADO
+    document.getElementById('forceRefresh').onclick = function() {
+        cachedItems = [];
+        lastFetchTime = 0;
+        cargarCola();
+    };
+
+    // ========== VERIFICAR/RECHAZAR OPTIMIZADO CON CACHE ==========
+    let accionSupervisorPendiente = null;
 
     window.verificarCashout = async function(row) {
-      const supervisorSelect = document.getElementById('supervisor-' + row);
-      const supervisorManual = document.getElementById('supervisor-manual-' + row);
-      let supervisorName = supervisorSelect.value;
-      if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
-      if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
-      await fetch(`${SCRIPT_URL}?row=${row}&estado=verificado&supervisorName=${encodeURIComponent(supervisorName)}`);
-      cargarCola();
-      showNotification("¡Cash out verificado!");
+        const supervisorSelect = document.getElementById('supervisor-' + row);
+        const supervisorManual = document.getElementById('supervisor-manual-' + row);
+        let supervisorName = supervisorSelect.value;
+        if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
+        if (!supervisorName) { 
+            showNotification("Falta nombre de supervisor.", "error"); 
+            return; 
+        }
+
+        // Usar cache en vez de fetch nuevo
+        const item = cachedItems.find(i => i.row === row);
+        const observacionOriginal = item ? item.observacion : "";
+
+        accionSupervisorPendiente = {
+            row: row,
+            estado: 'verificado',
+            supervisorName: supervisorName,
+            observacionOriginal: observacionOriginal
+        };
+
+        mostrarModalObservacionSupervisor(observacionOriginal);
     };
 
     window.rechazarCashout = async function(row) {
-      const supervisorSelect = document.getElementById('supervisor-' + row);
-      const supervisorManual = document.getElementById('supervisor-manual-' + row);
-      let supervisorName = supervisorSelect.value;
-      if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
-      if (!supervisorName) { showNotification("Falta nombre de supervisor.", "error"); return; }
-      await fetch(`${SCRIPT_URL}?row=${row}&estado=rechazado&supervisorName=${encodeURIComponent(supervisorName)}`);
-      cargarCola();
-      showNotification("Cash out rechazado.");
+        const supervisorSelect = document.getElementById('supervisor-' + row);
+        const supervisorManual = document.getElementById('supervisor-manual-' + row);
+        let supervisorName = supervisorSelect.value;
+        if (supervisorName === "Otro") supervisorName = supervisorManual.value.trim();
+        if (!supervisorName) { 
+            showNotification("Falta nombre de supervisor.", "error"); 
+            return; 
+        }
+
+        // Usar cache en vez de fetch nuevo
+        const item = cachedItems.find(i => i.row === row);
+        const observacionOriginal = item ? item.observacion : "";
+
+        accionSupervisorPendiente = {
+            row: row,
+            estado: 'rechazado',
+            supervisorName: supervisorName,
+            observacionOriginal: observacionOriginal
+        };
+
+        mostrarModalObservacionSupervisor(observacionOriginal);
     };
+
+    function mostrarModalObservacionSupervisor(observacionOriginal) {
+        const modal = document.getElementById('supervisorObservacionModal');
+        const display = document.getElementById('observacionOriginalDisplay');
+        
+        if (observacionOriginal && observacionOriginal.trim() !== "") {
+            display.innerHTML = `<strong>Observación del operador:</strong><br>${observacionOriginal}`;
+            display.style.display = 'block';
+        } else {
+            display.innerHTML = `<em>Sin observación del operador</em>`;
+            display.style.display = 'block';
+        }
+
+        document.getElementById('supervisorObsInputContainer').style.display = 'none';
+        document.getElementById('supervisorObsTexto').value = '';
+        modal.style.display = 'flex';
+    }
+
+    // Botón SÍ - mostrar campo para agregar observación (INMEDIATO)
+    document.getElementById('btnSupervisorObsSi').addEventListener('click', () => {
+        document.getElementById('supervisorObsInputContainer').style.display = 'block';
+    });
+
+    // Botón NO - procesar sin agregar observación (CON FEEDBACK INMEDIATO)
+    document.getElementById('btnSupervisorObsNo').addEventListener('click', async () => {
+        // Deshabilitar botones
+        document.getElementById('btnSupervisorObsSi').disabled = true;
+        document.getElementById('btnSupervisorObsNo').disabled = true;
+        document.getElementById('btnSupervisorObsNo').textContent = 'Procesando...';
+        
+        await procesarAccionSupervisor("");
+        
+        // Rehabilitar botones
+        document.getElementById('btnSupervisorObsSi').disabled = false;
+        document.getElementById('btnSupervisorObsNo').disabled = false;
+        document.getElementById('btnSupervisorObsNo').textContent = 'NO';
+    });
+
+    // Botón Procesar con observación adicional (CON FEEDBACK INMEDIATO)
+    document.getElementById('btnProcesarConObservacion').addEventListener('click', async () => {
+        const obsAdicional = document.getElementById('supervisorObsTexto').value.trim();
+        if (!obsAdicional) {
+            showNotification("Por favor, escribe una observación o selecciona NO.", "error");
+            return;
+        }
+        
+        // Deshabilitar botón
+        const btnProcesar = document.getElementById('btnProcesarConObservacion');
+        btnProcesar.disabled = true;
+        btnProcesar.textContent = 'Procesando...';
+        
+        await procesarAccionSupervisor(obsAdicional);
+        
+        // Rehabilitar botón
+        btnProcesar.disabled = false;
+        btnProcesar.textContent = 'Continuar';
+    });
+
+    async function procesarAccionSupervisor(obsAdicional) {
+        const { row, estado, supervisorName, observacionOriginal } = accionSupervisorPendiente;
+        
+        let observacionFinal = observacionOriginal || "";
+        if (obsAdicional) {
+            observacionFinal = observacionFinal 
+                ? `${observacionFinal} | [Supervisor: ${obsAdicional}]`
+                : `[Supervisor: ${obsAdicional}]`;
+        }
+
+        // CERRAR MODAL INMEDIATAMENTE
+        document.getElementById('supervisorObservacionModal').style.display = 'none';
+        const mensaje = estado === 'verificado' ? "Verificando cashout..." : "Rechazando cashout...";
+        showNotification(mensaje, "success");
+
+        // Enviar al servidor en segundo plano
+        await fetch(`${SCRIPT_URL}?row=${row}&estado=${estado}&supervisorName=${encodeURIComponent(supervisorName)}&observacion=${encodeURIComponent(observacionFinal)}`);
+        
+        // Invalidar cache para forzar recarga
+        cachedItems = [];
+        lastFetchTime = 0;
+        
+        cargarCola();
+        
+        const mensajeFinal = estado === 'verificado' ? "¡Cash out verificado!" : "Cash out rechazado.";
+        showNotification(mensajeFinal);
+        
+        accionSupervisorPendiente = null;
+    }
 
     // Al cargar
     if (sessionStorage.getItem('supervisorAuth') === 'true') {

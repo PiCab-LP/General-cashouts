@@ -1,7 +1,7 @@
 :root {
-    --primary: #165B33;      /* verde oscuro */
-    --secondary: #EA4630;    /* rojo navideño */
-    --accent: #F8B229;       /* dorado */
+    --primary: #165B33;
+    --secondary: #EA4630;
+    --accent: #F8B229;
     --background: radial-gradient(circle at top, #1b2735 0%, #090a0f 60%, #02030a 100%);
     --surface: rgba(10, 16, 25, 0.9);
     --text: #f9fafb;
@@ -24,7 +24,6 @@ body {
     overflow: hidden;
 }
 
-/* Nieve de fondo */
 .snow {
     position: fixed;
     inset: 0;
@@ -43,15 +42,10 @@ body {
 }
 
 @keyframes snowfall {
-    0% {
-        transform: translateY(-40px);
-    }
-    100% {
-        transform: translateY(40px);
-    }
+    0% { transform: translateY(-40px); }
+    100% { transform: translateY(40px); }
 }
 
-/* Botón de cerrar sesión operador arriba a la derecha del body */
 .logout-global {
     position: fixed;
     top: 18px;
@@ -182,6 +176,18 @@ button:hover {
     box-shadow: 0 12px 22px rgba(234, 70, 48, 0.45);
 }
 
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #555;
+}
+
+button:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    background: #555;
+}
+
 .role-selector {
     display: flex;
     gap: 14px;
@@ -298,7 +304,6 @@ button:hover {
     to { opacity:1; }
 }
 
-/* ========== MODAL DE OBSERVACIÓN ========== */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -393,7 +398,6 @@ button:hover {
     width: 100%;
 }
 
-/* ========== ETIQUETA DE OBSERVACIÓN EN COLA ========== */
 .observacion-tag {
     background: rgba(248, 178, 41, 0.15);
     color: var(--accent);
@@ -403,4 +407,33 @@ button:hover {
     margin-top: 10px;
     margin-bottom: 8px;
     border-left: 3px solid var(--accent);
+}
+
+#observacionOriginalDisplay {
+    max-height: 100px;
+    overflow-y: auto;
+    word-wrap: break-word;
+}
+
+#supervisorObsTexto {
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--border-radius);
+    border: 1.8px solid rgba(255, 255, 255, 0.14);
+    background: rgba(9, 10, 15, 0.92);
+    color: var(--text);
+    font-size: 15px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+#supervisorObsTexto:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(248, 178, 41, 0.35);
+    outline: none;
+}
+
+#btnProcesarConObservacion {
+    margin-top: 12px;
+    width: 100%;
 }
