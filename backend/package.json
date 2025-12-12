@@ -1,19 +1,16 @@
 {
-  "name": "backend",
+  "name": "general-cashouts",
   "version": "1.0.0",
-  "description": "",
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "mongoose": "^9.0.1"
+    "express": "^4.19.2",
+    "mongoose": "^8.9.0"
   }
 }
